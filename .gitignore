@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+.python-version
+reports/
+steg_analysis/
+steg_report.json
+report_test.json
+*.egg-info/
+.env
+
+# Sample/test data files — not part of the scanner project
+*.pdf
+*.dat
