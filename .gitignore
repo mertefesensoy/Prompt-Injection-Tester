@@ -12,3 +12,6 @@ report_test.json
 # Sample/test data files — not part of the scanner project
 *.pdf
 *.dat
+
+.claude
+
