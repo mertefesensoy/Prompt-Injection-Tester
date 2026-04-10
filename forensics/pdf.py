@@ -22,6 +22,7 @@ from .algorithms import (
     lsb_spatial_autocorr, lsb_heatmap, shannon_entropy,
     ieee754_word_artifact_confidence,
 )
+from .unicode_attacks import scan_all_unicode_attacks
 
 # ─── PDF Structure ────────────────────────────────────────────────────────────
 
@@ -459,10 +460,19 @@ def check_content_streams(doc: fitz.Document) -> List[dict]:
             clips_info = _clip_rect_analysis(tokens)
             op_breakdown = _stream_operator_breakdown(tokens)
 
+            # Unicode attack scan — run on raw stream decoded as UTF-8/latin-1
+            # so that Tag characters embedded in the stream are preserved.
+            try:
+                stream_text = raw.decode("utf-8", errors="replace")
+            except Exception:
+                stream_text = raw.decode("latin-1", errors="replace")
+            unicode_attacks = scan_all_unicode_attacks(stream_text)
+
             # Verdict
-            if invisible:
+            ua_suspicious = unicode_attacks["verdict"] in ("SUSPICIOUS", "NEEDS_REVIEW")
+            if invisible or ua_suspicious:
                 verdict = "SUSPICIOUS"
-                confidence = 0.85
+                confidence = 0.90 if unicode_attacks["tags"].get("pi_matches") else 0.85
             elif floats_info["verdict"] == "WORD_ARTIFACT" and clips_info["verdict"] == "WORD_ARTIFACT":
                 verdict = "FALSE_POSITIVE"
                 confidence = 0.93
@@ -488,6 +498,7 @@ def check_content_streams(doc: fitz.Document) -> List[dict]:
                 "floats": floats_info,
                 "clip_rects": clips_info,
                 "operator_breakdown": op_breakdown,
+                "unicode_attacks": unicode_attacks,
                 "verdict": verdict,
                 "confidence": confidence,
             })

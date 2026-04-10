@@ -259,6 +259,17 @@ def lsb_bitstream(arr: np.ndarray) -> bytes:
     return bytes(result)
 
 
+def decode_unicode_tags(text: str) -> str:
+    """
+    Decode Unicode Tag characters (U+E0020–U+E007E) back to ASCII.
+    Returns the decoded string (empty if no tag characters present).
+    Convenience re-export from unicode_attacks for callers that only
+    import from algorithms.
+    """
+    from .unicode_attacks import decode_unicode_tags as _decode
+    return _decode(text)
+
+
 def scan_prompt_injection(bs: bytes) -> List[str]:
     """
     Decode bytes as ASCII and scan for prompt injection patterns.

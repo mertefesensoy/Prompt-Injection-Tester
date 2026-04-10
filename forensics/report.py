@@ -172,6 +172,18 @@ def _render_pdf_sections(lines: list, sections: dict, no_color: bool, W: int) ->
             clips.get("verdict") in ("WORD_ARTIFACT", "NORMAL"),
             no_color
         ))
+        ua = cs.get("unicode_attacks", {})
+        ua_verdict = ua.get("verdict", "CLEAN")
+        if ua_verdict != "CLEAN":
+            lines.append(_check(f"Unicode attack scan: {ua_verdict}", False, no_color))
+            for note in ua.get("summary", []):
+                lines.append(f"      {_c('!', _RED, no_color)} {note[:100]}")
+            tags = ua.get("tags", {})
+            if tags.get("decoded_payload"):
+                payload_preview = tags["decoded_payload"][:120].replace("\n", " ")
+                lines.append(f"      {_c('Hidden payload', _MAGENTA, no_color)}: \"{payload_preview}\"")
+        else:
+            lines.append(_check("No Unicode invisible-ink attack characters", True, no_color))
     if not sections.get("content_streams"):
         lines.append("    (none found)")
     lines.append("")
@@ -292,6 +304,19 @@ def _render_dat_sections(lines: list, sections: dict, no_color: bool, W: int) ->
         ))
         for m in pi.get("matches", []):
             lines.append(f"      {_c('!', _RED, no_color)} {m.get('context','')[:80]}")
+
+        ua = text_a.get("unicode_attacks", {})
+        ua_verdict = ua.get("verdict", "CLEAN")
+        lines.append(_check(
+            f"Unicode attack scan: {ua_verdict}",
+            ua_verdict == "CLEAN", no_color
+        ))
+        for note in ua.get("summary", []):
+            lines.append(f"      {_c('!', _RED, no_color)} {note[:100]}")
+        tags = ua.get("tags", {})
+        if tags.get("decoded_payload"):
+            payload_preview = tags["decoded_payload"][:120].replace("\n", " ")
+            lines.append(f"      {_c('Hidden payload', _MAGENTA, no_color)}: \"{payload_preview}\"")
         lines.append("")
 
     bin_a = dat.get("binary_analysis")
@@ -549,11 +574,23 @@ def _html_dat_sections(sections: dict) -> str:
             f'<div class="ev-against">{_html_module.escape(m.get("context","")[:100])}</div>'
             for m in pi.get("matches", [])
         )
+        ua = text_a.get("unicode_attacks", {})
+        ua_verdict = ua.get("verdict", "CLEAN")
+        ua_items = "".join(
+            f'<div class="ev-against">{_html_module.escape(note[:120])}</div>'
+            for note in ua.get("summary", [])
+        )
+        tags = ua.get("tags", {})
+        if tags.get("decoded_payload"):
+            payload_esc = _html_module.escape(tags["decoded_payload"][:200])
+            ua_items += f'<div class="ev-against">Hidden payload: &ldquo;{payload_esc}&rdquo;</div>'
         parts.append(f"""<section>
 <h2>Text Content</h2>
 <div class="item info">Lines: {text_a.get('line_count',0)} | Words: {text_a.get('word_count',0)} | Structure: {text_a.get('structure','?')}</div>
 {_html_check(f"Prompt injection: {pi.get('verdict','?')}", pi.get('verdict') == 'CLEAN')}
 {pi_items}
+{_html_check(f"Unicode attack scan: {ua_verdict}", ua_verdict == 'CLEAN')}
+{ua_items}
 </section>""")
 
     if bin_a:

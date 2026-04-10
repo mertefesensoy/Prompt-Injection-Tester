@@ -123,6 +123,14 @@ def _overall_verdict(sections: dict, file_type: str) -> dict:
                 score += 0.50
             elif v == "NEEDS_REVIEW":
                 score += 0.15
+            # Unicode invisible-ink attack in this stream
+            ua = cs.get("unicode_attacks", {})
+            if ua.get("tags", {}).get("pi_matches"):
+                score += 0.70   # Tags + PI match → confirmed attack vector
+            elif ua.get("tags", {}).get("tag_count", 0) > 0:
+                score += 0.40   # Tags present without PI pattern match
+            if ua.get("bidi", {}).get("has_override"):
+                score += 0.30   # BiDi override (Trojan Source style)
 
         for img in sections.get("images", []):
             v = img.get("verdict", "")
@@ -148,6 +156,16 @@ def _overall_verdict(sections: dict, file_type: str) -> dict:
             score += 0.70
         elif dat_v == "NEEDS_REVIEW":
             score += 0.25
+        # Unicode attack findings — check both text and binary analysis paths
+        text_a = dat.get("text_analysis") or {}
+        bin_a = dat.get("binary_analysis") or {}
+        ua = text_a.get("unicode_attacks") or bin_a.get("unicode_attacks") or {}
+        if ua.get("tags", {}).get("pi_matches"):
+            score += 0.70
+        elif ua.get("tags", {}).get("tag_count", 0) > 0:
+            score += 0.40
+        if ua.get("bidi", {}).get("has_override"):
+            score += 0.30
 
     score = min(score, 1.0)
 

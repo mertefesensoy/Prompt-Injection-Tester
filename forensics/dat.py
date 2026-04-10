@@ -14,6 +14,7 @@ from .algorithms import (
     chi2_pov, rs_steganalysis, lsb_bitstream, scan_prompt_injection,
     shannon_entropy, PI_PATTERNS,
 )
+from .unicode_attacks import scan_all_unicode_attacks
 
 _PI_COMPILED = [re.compile(p, re.IGNORECASE) for p in PI_PATTERNS]
 
@@ -131,7 +132,7 @@ def check_text_content(text: str) -> dict:
                 else:
                     structure = "matrix"
 
-    # Prompt injection scan on full text
+    # Prompt injection scan on visible text
     pi_matches = []
     for pat, compiled in zip(PI_PATTERNS, _PI_COMPILED):
         m = compiled.search(text)
@@ -141,6 +142,9 @@ def check_text_content(text: str) -> dict:
                 "pattern": pat,
                 "context": f"...{snippet}...",
             })
+
+    # Unicode attack scan (invisible ink, zero-width smuggling, BiDi overrides)
+    unicode_attacks = scan_all_unicode_attacks(text)
 
     return {
         "line_count": len(lines),
@@ -153,6 +157,7 @@ def check_text_content(text: str) -> dict:
             "matches": pi_matches,
             "verdict": "SUSPICIOUS" if pi_matches else "CLEAN",
         },
+        "unicode_attacks": unicode_attacks,
     }
 
 
@@ -220,8 +225,21 @@ def check_dat(path: str, raw_bytes: bytes) -> dict:
             text = raw_bytes.decode("latin-1", errors="replace")
         text_analysis = check_text_content(text)
     else:
-        # Binary file
+        # Binary file — but also run Unicode attack scan on UTF-8 decoded content.
+        # Unicode Tag characters (U+E0000–U+E007F) encode as 4-byte UTF-8 sequences
+        # that contain no printable ASCII bytes, causing files to be mis-classified
+        # as binary. We decode as UTF-8 regardless and scan for invisible-ink attacks.
         binary_analysis = check_binary_steg(raw_bytes)
+        try:
+            unicode_text = raw_bytes.decode("utf-8", errors="replace")
+        except Exception:
+            unicode_text = ""
+        if unicode_text:
+            ua_standalone = scan_all_unicode_attacks(unicode_text)
+            if ua_standalone["verdict"] != "CLEAN":
+                # Promote binary_analysis dict with unicode findings so the
+                # evidence collection block below can surface them.
+                binary_analysis["unicode_attacks"] = ua_standalone
 
     # ── Verdict ──────────────────────────────────────────────────
     evidence_against = []
@@ -239,6 +257,27 @@ def check_dat(path: str, raw_bytes: bytes) -> dict:
             f"printable ratio {fmt['printable_ratio']:.0%} (plain text file)"
         )
 
+        ua = text_analysis.get("unicode_attacks", {})
+        ua_verdict = ua.get("verdict", "CLEAN")
+        if ua_verdict in ("SUSPICIOUS", "NEEDS_REVIEW"):
+            tags = ua.get("tags", {})
+            if tags.get("tag_count", 0) > 0:
+                pi_count = len(tags.get("pi_matches", []))
+                evidence_against.append(
+                    f"Unicode Tag payload: {tags['tag_count']} invisible char(s), "
+                    f"decoded: \"{tags['decoded_payload'][:60]}\" "
+                    + (f"({pi_count} PI match(es))" if pi_count else "(no PI match yet)")
+                )
+            for note in ua.get("summary", []):
+                if note not in [e.split(":")[0] for e in evidence_against]:
+                    if "zero-width" in note or "BiDi" in note:
+                        evidence_against.append(note)
+        elif ua_verdict == "LOW_RISK":
+            for note in ua.get("summary", []):
+                evidence_against.append(note)
+        else:
+            evidence_for.append("no invisible Unicode attack characters detected")
+
     if binary_analysis:
         if binary_analysis["verdict"] == "SUSPICIOUS":
             if binary_analysis["chi2_verdict"] == "SUSPICIOUS":
@@ -255,6 +294,21 @@ def check_dat(path: str, raw_bytes: bytes) -> dict:
                 )
         else:
             evidence_for.append("LSB analysis: no steganography detected")
+
+        # Unicode attacks found even in binary-classified files
+        ua_bin = binary_analysis.get("unicode_attacks", {})
+        if ua_bin:
+            tags = ua_bin.get("tags", {})
+            if tags.get("tag_count", 0) > 0:
+                pi_count = len(tags.get("pi_matches", []))
+                evidence_against.append(
+                    f"Unicode Tag payload in binary file: {tags['tag_count']} invisible char(s), "
+                    f"decoded: \"{tags['decoded_payload'][:60]}\" "
+                    + (f"({pi_count} PI match(es))" if pi_count else "(no PI match yet)")
+                )
+            for note in ua_bin.get("summary", []):
+                if "zero-width" in note or "BiDi" in note:
+                    evidence_against.append(note)
 
     if not evidence_against:
         verdict = "CLEAN"

@@ -50,6 +50,8 @@ Options:
 | **Embedded files** | Attachments hidden inside the PDF |
 | **Incremental updates** | Second-revision objects that shadow original content |
 | **Content streams** | Invisible text (Tr=3), sub-pixel off-page positioning |
+| **Unicode Tag attack** | Invisible Unicode Tags embedded in stream bytes decoded to reveal hidden prompt injection instructions |
+| **BiDi override** | Right-to-left override characters in stream content |
 | **Float forensics** | IEEE 754 sub-pixel clip offsets (Word artifact vs. manipulation) |
 | **MCID block analysis** | Marked-content blocks classified as CONTENT / SPACING / INVISIBLE |
 | **Image RGB channels** | Chi-square PoV LSB test, RS steganalysis, LSB bitstream PI scan |
@@ -67,6 +69,9 @@ Options:
 |-------|-----------------|
 | **Format detection** | Text vs. binary; matrix / CSV / JSON / plain |
 | **Text PI scan** | 12 prompt injection regex patterns over full text content |
+| **Unicode Tag attack** | Invisible Unicode Tags (U+E0000–U+E007F) encoding hidden ASCII instructions ("invisible ink"); decoded payload is scanned for PI patterns |
+| **Zero-width smuggling** | Zero-width space, joiner, non-joiner, BOM, and invisible math chars used for covert channel encoding or keyword-filter evasion |
+| **BiDi override attack** | Right-to-left override chars (Trojan Source / CVE-2021-42574) that cause human-visible text to differ from machine-readable content |
 | **Shannon entropy** | Compressed / encrypted content masquerading as data |
 | **Binary LSB analysis** | Chi-square PoV + RS steganalysis on binary payloads |
 | **LSB bitstream PI** | Decode LSB plane to bytes, scan for injected instructions |
